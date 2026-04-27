@@ -32,26 +32,20 @@ if file:
     st.write(df.head())
 
     # -------------------------------
-    # CHECK LABEL
+    # VALIDATION
     # -------------------------------
     if "label" not in df.columns:
         st.error("❌ Dataset must contain 'label' column")
         st.stop()
 
-    # -------------------------------
-    # USE ALL FEATURES EXCEPT LABEL
-    # -------------------------------
     X = df.drop("label", axis=1)
     y = df["label"]
 
-    # -------------------------------
-    # DEBUG INFO
-    # -------------------------------
     st.write("🔍 Model expects:", model.n_features_in_)
     st.write("🔍 Input features:", X.shape[1])
 
     if X.shape[1] != model.n_features_in_:
-        st.error("❌ Feature mismatch! Dataset does not match trained model")
+        st.error("❌ Feature mismatch with trained model")
         st.stop()
 
     # -------------------------------
@@ -68,15 +62,21 @@ if file:
     st.write(f"False Negative Rate: {fnr:.4f}")
 
     # -------------------------------
-    # STRONG ADVERSARIAL ATTACK
+    # 🔥 STRONG ADVERSARIAL ATTACK
     # -------------------------------
-    noise = np.random.normal(0, 2.0, X.shape)
-    X_adv = X + noise
+    noise = np.random.normal(0, 2.5, X.shape)
+
+    # Scale noise relative to feature magnitude
+    X_adv = X + (noise * X.std())
 
     # Extra distortion
-    X_adv = X_adv * np.random.uniform(0.5, 1.5)
+    X_adv = X_adv * np.random.uniform(0.3, 1.7)
 
-    # Clip values
+    # Force stronger disruption on some values
+    mask = np.random.rand(*X_adv.shape) < 0.2
+    X_adv[mask] = X_adv[mask] * np.random.uniform(1.5, 3.0)
+
+    # Clip to valid range
     X_adv = np.clip(X_adv, X.min().min(), X.max().max())
 
     preds_adv = model.predict(X_adv)
@@ -90,10 +90,9 @@ if file:
     st.write(f"False Negative Rate: {fnr_adv:.4f}")
 
     # -------------------------------
-    # DEFENSE (LIGHT FIX WITHOUT RETRAINING)
+    # 🛡️ DEFENSE (SIMULATED RECOVERY)
     # -------------------------------
-    # Reduce noise slightly to simulate recovery
-    X_def = X_adv * 0.7
+    X_def = X_adv * 0.6  # reduce distortion
 
     preds_def = model.predict(X_def)
     acc_def = accuracy_score(y, preds_def)
@@ -101,12 +100,12 @@ if file:
     tn, fp, fn, tp = confusion_matrix(y, preds_def).ravel()
     fnr_def = fn / (fn + tp) if (fn + tp) != 0 else 0
 
-    st.subheader("🛡️ After Defense (Simulated Recovery)")
+    st.subheader("🛡️ After Defense (Recovery)")
     st.write(f"Accuracy: {acc_def:.4f}")
     st.write(f"False Negative Rate: {fnr_def:.4f}")
 
     # -------------------------------
-    # PERFORMANCE SUMMARY
+    # 📊 PERFORMANCE SUMMARY
     # -------------------------------
     st.subheader("📊 Performance Summary")
 
@@ -119,21 +118,29 @@ if file:
     st.write("Defense FNR:", fnr_def)
 
     # -------------------------------
-    # PREDICTION COMPARISON
+    # 🔍 FEATURE CHANGE EXAMPLE
     # -------------------------------
-    st.subheader("🔍 Prediction Comparison")
+    st.subheader("🔍 Feature Change Example")
 
-    st.write("Before Attack:", preds[:10])
-    st.write("After Attack:", preds_adv[:10])
+    st.write("Before Attack:", X.iloc[0].values)
+    st.write("After Attack:", X_adv[0])
 
     # -------------------------------
-    # LABEL DISTRIBUTION
+    # 🔁 PREDICTION DIFFERENCE
+    # -------------------------------
+    st.subheader("🔁 Prediction Difference")
+
+    changes = (preds != preds_adv).sum()
+    st.write(f"Changed predictions: {changes} out of {len(preds)}")
+
+    # -------------------------------
+    # 📌 LABEL DISTRIBUTION
     # -------------------------------
     st.subheader("📌 Label Distribution")
     st.write(df["label"].value_counts())
 
     # -------------------------------
-    # GRAPH
+    # 📉 GRAPH
     # -------------------------------
     st.subheader("📉 Accuracy Comparison")
 
